@@ -1,0 +1,1 @@
+{ "name": "lucky-merge-defense", "private": true, "type": "module", "scripts": { "start": "python3 -m http.server 8090", "sim": "node tools/sim.mjs" } }
