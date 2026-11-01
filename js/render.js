@@ -1,8 +1,8 @@
 import { BOARD, UNITS, RARITY_INFO, RULES } from './config.js';
 import { cellCenter, pathPos, GRID_CELLS } from './game.js';
+import { sprite } from './sprites.js';
 
 const COLORS = { path: '#1c2140', pathLine: '#2a3160', cell: '#242a4a', cellLine: '#343c66', sel: '#ffd166' };
-const emojiFont = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 export class Renderer {
   constructor(canvas) {
@@ -83,8 +83,9 @@ export class Renderer {
     ctx.fillStyle = '#10131f'; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, cs * 0.05); ctx.stroke();
-    ctx.font = `${r * 1.15}px ${emojiFont}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff'; ctx.fillText(u.icon, p.x, p.y + r * 0.05);
+    ctx.imageSmoothingEnabled = false;
+    const img = sprite(u.id, 4), sz = r * 1.6;
+    if (img) ctx.drawImage(img, p.x - sz / 2, p.y - sz / 2, sz, sz);
     ctx.restore();
     if (cellObj.count > 1) {
       const bx = p.x + r * 0.75, by = p.y - r * 0.75;
@@ -96,14 +97,13 @@ export class Renderer {
     const ctx = this.ctx, cs = this.cell, pos = pathPos(e.t), p = this.toPx(pos.x, pos.y), r = e.size * cs;
     ctx.save();
     if (e.boss) { ctx.shadowColor = '#ff5c7a'; ctx.shadowBlur = 16; }
-    ctx.font = `${r * 1.7}px ${emojiFont}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const slowed = g.time < e.slowUntil, burning = e.dots.some(d => d.kind === 'burn'), poisoned = e.dots.some(d => d.kind === 'poison');
     if (slowed) { ctx.fillStyle = 'rgba(78,168,255,.35)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.05, 0, Math.PI * 2); ctx.fill(); }
     if (poisoned) { ctx.fillStyle = 'rgba(94,227,154,.3)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.0, 0, Math.PI * 2); ctx.fill(); }
     if (burning) { ctx.fillStyle = 'rgba(255,120,40,.35)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.0, 0, Math.PI * 2); ctx.fill(); }
-    if (e.flash > 0) { try { ctx.filter = 'brightness(2.2) saturate(0.2)'; } catch (err) {} }
-    ctx.fillText(e.icon, p.x, p.y + r * 0.08);
-    ctx.filter = 'none';
+    ctx.imageSmoothingEnabled = false;
+    const img = e.flash > 0 ? sprite(e.sprite, 4, '#ffffff') : sprite(e.sprite, 4), sz = r * 2.1;
+    if (img) { ctx.shadowBlur = 0; ctx.drawImage(img, p.x - sz / 2, p.y - sz / 2, sz, sz); }
     ctx.restore();
     if (e.hp < e.maxHp) {
       const w = r * 1.8, h = Math.max(3, cs * 0.07), x = p.x - w / 2, y = p.y - r - h - 2;

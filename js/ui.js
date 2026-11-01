@@ -1,5 +1,6 @@
 import { RULES, RARITY, RARITY_INFO, UNITS, RECIPES, UPGRADE, SPEEDS } from './config.js';
 import { fmt, pad2 } from './utils.js';
+import { spriteImg } from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -10,6 +11,7 @@ export class UI {
     this.bind();
     this.renderUpgrades(); this.renderRecipes();
     this.showBest();
+    $('title-lineup').innerHTML = ['archer','mage','pyro','dragonknight','phoenix','chaoslord'].map(k => spriteImg(k, 44)).join('');
   }
   bind() {
     $('btn-start').onclick = () => this.startGame();
@@ -127,7 +129,7 @@ export class UI {
     if (!c) { $('unit-card').classList.add('hidden'); if (this.selected >= 0) { this.selected = -1; this.r.selected = -1; } return; }
     const u = UNITS[c.id], info = RARITY_INFO[u.rarity];
     $('unit-card').classList.remove('hidden');
-    $('uc-icon').textContent = u.icon; $('uc-icon').style.borderColor = info.color;
+    $('uc-icon').innerHTML = spriteImg(u.id, 40); $('uc-icon').style.borderColor = info.color;
     $('uc-name').textContent = u.name + (c.count > 1 ? ` ×${c.count}` : '');
     $('uc-rarity').textContent = info.name; $('uc-rarity').className = 'badge r-' + u.rarity;
     $('uc-desc').textContent = u.desc;
@@ -158,7 +160,7 @@ export class UI {
   renderRecipes() {
     $('tab-recipe').innerHTML = RECIPES.map((rc, i) => {
       const st = this.g.recipeStatus(rc), ok = st.every(s => s.have), res = UNITS[rc.result];
-      return `<div class="recipe"><span class="res">${res.icon}</span><div><b>${res.name}</b><div class="parts">${st.map(s => `<span class="part ${s.have ? 'have' : ''}">${UNITS[s.id].icon} ${UNITS[s.id].name}</span>`).join('')}</div></div><button class="btn ${ok ? 'primary' : ''}" data-craft="${i}" ${ok ? '' : 'disabled'}>조합</button></div>`;
+      return `<div class="recipe"><span class="res">${spriteImg(res.id, 36)}</span><div><b>${res.name}</b><div class="parts">${st.map(s => `<span class="part ${s.have ? 'have' : ''}">${spriteImg(s.id, 16)} ${UNITS[s.id].name}</span>`).join('')}</div></div><button class="btn ${ok ? 'primary' : ''}" data-craft="${i}" ${ok ? '' : 'disabled'}>조합</button></div>`;
     }).join('');
     $('tab-recipe').querySelectorAll('[data-craft]').forEach(b => b.onclick = () => this.craft(Number(b.dataset.craft)));
   }

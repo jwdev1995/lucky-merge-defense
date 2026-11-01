@@ -207,9 +207,9 @@ export class Game {
   }
   spawn(q) {
     const def = ENEMIES[q.type];
-    const e = { id: _id++, type: q.type, icon: def.icon, name: def.name, t: 0, laps: 0, speed: def.speed * RULES.enemySpeed,
+    const e = { id: _id++, type: q.type, sprite: q.type, icon: def.icon, name: def.name, t: 0, laps: 0, speed: def.speed * RULES.enemySpeed,
       size: def.size, gold: def.gold, shield: !!def.shield, boss: !!def.boss, slow: 0, slowUntil: 0, dots: [], flash: 0, dead: false };
-    if (q.bossDef) { e.hp = e.maxHp = q.bossDef.hp; e.icon = q.bossDef.icon; e.name = q.bossDef.name; e.gold = RULES.bossGoldBase + this.round * 5; this.boss = e; }
+    if (q.bossDef) { e.hp = e.maxHp = q.bossDef.hp; e.icon = q.bossDef.icon; e.sprite = q.bossDef.sprite; e.name = q.bossDef.name; e.gold = RULES.bossGoldBase + this.round * 5; this.boss = e; }
     else e.hp = e.maxHp = Math.round(def.hp * q.hpScale);
     this.enemies.push(e);
   }

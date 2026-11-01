@@ -89,10 +89,10 @@ export const ENEMIES = {
   boss:   { name:'보스',   icon:'👹', hp:1, speed:0.55, gold:0, size:0.62, boss:true },
 };
 export const BOSSES = [
-  { round: 10, name:'오우거 군주', icon:'👹', hp:600 },
-  { round: 20, name:'흑룡',       icon:'🐉', hp:4500 },
-  { round: 30, name:'리치 킹',    icon:'💀', hp:30000 },
-  { round: 40, name:'마왕',       icon:'👑', hp:95000 },
+  { round: 10, name:'오우거 군주', icon:'👹', sprite:'ogre', hp:600 },
+  { round: 20, name:'흑룡',       icon:'🐉', sprite:'blackdragon', hp:4500 },
+  { round: 30, name:'리치 킹',    icon:'💀', sprite:'lich', hp:30000 },
+  { round: 40, name:'마왕',       icon:'👑', sprite:'demonking', hp:95000 },
 ];
 
 export const WAVE = {
