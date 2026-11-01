@@ -109,3 +109,10 @@ h2 { margin: 0 0 10px; font-size: 22px; }
 
 @media (prefers-reduced-motion: reduce) { .r-mythic, #enemy-bar.danger, #board-wrap.danger { animation: none; } }
 @media (min-width: 900px) { #app { max-width: 640px; } }
+
+/* 픽셀 스프라이트 */
+img.px { image-rendering: pixelated; image-rendering: crisp-edges; vertical-align: middle; }
+.part img.px { margin-right: 2px; }
+.lineup { display: flex; justify-content: center; gap: 6px; margin: 4px 0 6px; }
+.lineup img { background: var(--panel-2); border-radius: 10px; padding: 3px; }
+.recipe .res { filter: none; display: flex; }
