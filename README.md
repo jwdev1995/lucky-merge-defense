@@ -15,7 +15,7 @@
 - **40라운드**, 10·20·30·40 라운드 보스 — 20초 안에 못 잡으면 패배
 - **행운의 룰렛** (30G), **등급별 강화**, 유닛 이동/교환/판매
 - 1× / 2× / 3× 배속, 최고 기록 로컬 저장, PC/모바일 반응형(터치 1탭 조작)
-- 외부 라이브러리·에셋·빌드 도구 없음 (Vanilla JS + Canvas, 효과음은 WebAudio 합성)
+- **픽셀 아트 스프라이트 30종**(유닛 22 + 몬스터 3 + 보스 4)을 문자열 그리드로 코드에서 생성 — 외부 라이브러리·에셋·빌드 도구 없음 (Vanilla JS + Canvas, 효과음은 WebAudio 합성)
 
 ## 조작
 | 입력 | 동작 |
@@ -47,12 +47,14 @@ index.html        화면/HUD 마크업
 css/style.css     디자인 토큰·레이아웃
 js/config.js      밸런스 데이터 (유닛·몬스터·보스·확률·레시피·경제)
 js/game.js        게임 로직 (DOM 비의존: 소환·합성·조합·라운드·전투)
+js/sprites.js     픽셀 아트 스프라이트 정의 + 오프스크린 캐시
 js/render.js      Canvas 렌더링 (보드·유닛·몬스터·투사체·이펙트)
 js/ui.js          HUD·패널·카드·탭·토스트·결과 화면
 js/input.js       포인터 입력 (탭/드래그)
 js/audio.js       WebAudio 효과음
 js/main.js        부트스트랩 + 게임 루프
 tools/sim.mjs     헤드리스 밸런스 시뮬레이터
+tools/sprites-sheet.html  스프라이트 시트 미리보기
 docs/GDD.md       게임 기획서
 docs/DESIGN.md    디자인 시스템
 ```
