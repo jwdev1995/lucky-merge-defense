@@ -1,0 +1,8 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>Sprite Sheet</title>
+<style>body{background:#0e1020;color:#e8ecf8;font-family:system-ui;padding:16px}.g{display:flex;flex-wrap:wrap;gap:12px}.c{width:96px;text-align:center;font-size:11px}canvas{image-rendering:pixelated;background:#242a4a;border-radius:8px}</style></head>
+<body><div class="g" id="g"></div>
+<script type="module">
+import { PIXEL_ART, sprite } from '../js/sprites.js';
+const g = document.getElementById('g');
+for (const k of Object.keys(PIXEL_ART)) { const c = sprite(k, 6); const d = document.createElement('div'); d.className = 'c'; d.appendChild(c); d.append(document.createElement('br'), k); g.appendChild(d); }
+</script></body></html>
