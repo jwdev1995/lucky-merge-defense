@@ -1,4 +1,4 @@
-import { RULES, RARITY, RARITY_INFO, UNITS, RECIPES, UPGRADE, SPEEDS, ELEMENTS, ELEMENT_ORDER } from './config.js';
+import { RULES, RARITY, RARITY_INFO, UNITS, RECIPES, UPGRADE, SPEEDS, ELEMENTS, ELEMENT_ORDER, ELEMENT_SKILLS } from './config.js';
 import { Match } from './match.js';
 import { Renderer } from './render.js';
 import { bindInput } from './input.js';
@@ -197,7 +197,8 @@ export class UI {
     $('uc-name').textContent = u.name + (c.count > 1 ? ` ×${c.count}` : '');
     $('uc-rarity').textContent = info.name; $('uc-rarity').className = 'badge r-' + u.rarity;
     $('uc-elem').textContent = el.name; $('uc-elem').style.background = el.color;
-    $('uc-desc').textContent = `${u.desc} · ${ELEMENTS[el.beats].name} 속성에 강함`;
+    const sk = ELEMENT_SKILLS[u.element];
+    $('uc-desc').innerHTML = `${u.desc} · ${ELEMENTS[el.beats].name} 속성에 강함<br><span style="color:${el.color}">✦ ${sk.name} ${Math.round(sk.chance * 100)}%</span> ${sk.desc}`;
     const mult = g.dmgMult(u.rarity) * c.count;
     const typeName = { single: '단일', splash: '광역', chain: '연쇄', pierce: '관통', slow: '둔화', poison: '중독', burn: '화상' }[u.type];
     $('uc-stats').innerHTML = `<div>공격력<b>${fmt(u.dmg * mult)}</b></div><div>공속<b>${u.rate}/s</b></div><div>사거리<b>${u.range}</b></div><div>DPS<b>${fmt(g.unitDps(c))}</b></div>`
@@ -232,10 +233,11 @@ export class UI {
     $('tab-recipe').querySelectorAll('[data-craft]').forEach(b => b.onclick = () => this.craft(Number(b.dataset.craft)));
   }
   renderElements() {
-    $('tab-element').innerHTML = `<p class="muted small" style="margin:0 0 6px">유리 ×${RULES.elementAdv} · 불리 ×${RULES.elementDis}. 라운드마다 몬스터 속성이 순환하고, 보스는 고유 속성을 가집니다.</p>`
+    $('tab-element').innerHTML = `<p class="muted small" style="margin:0 0 6px">유리 ×${RULES.elementAdv} · 불리 ×${RULES.elementDis}. 라운드마다 몬스터 속성이 순환하고, 보스는 고유 속성을 가집니다. 속성 스킬은 타격마다 확률로 발동하며 보스에게는 스턴·속박·밀치기가 30%만 적용됩니다.</p>`
       + ELEMENT_ORDER.map(e => {
         const el = ELEMENTS[e], units = Object.values(UNITS).filter(u => u.element === e);
-        return `<div class="elem-row-item">${elemBadge(e)}<span class="muted small">→ ${ELEMENTS[el.beats].name}에 강함</span><span class="elem-units">${units.map(u => spriteImg(u.id, 22)).join('')}</span></div>`;
+        const sk = ELEMENT_SKILLS[e];
+        return `<div class="elem-row-item">${elemBadge(e)}<span class="small"><span class="muted">${ELEMENTS[el.beats].name}에 강함 · </span><b>✦ ${sk.name}</b> <span class="muted">${Math.round(sk.chance * 100)}% — ${sk.desc}</span></span><span class="elem-units">${units.map(u => spriteImg(u.id, 22)).join('')}</span></div>`;
       }).join('');
   }
   // ---- 프레임 ----

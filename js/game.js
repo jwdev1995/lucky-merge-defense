@@ -1,6 +1,6 @@
 // 보드 1개의 게임 로직 (DOM 비의존). 라운드 진행·승패는 match.js의 Match가 관리한다.
 // UI/렌더러는 상태를 읽고, hooks로 이벤트를 받는다.
-import { BOARD, RULES, RARITY, RARITY_INFO, UPGRADE, SUMMON_ODDS, ROULETTE, UNITS, RECIPES, ENEMIES, BOSSES, WAVE, elementMult } from './config.js';
+import { BOARD, RULES, RARITY, RARITY_INFO, UPGRADE, SUMMON_ODDS, ROULETTE, UNITS, RECIPES, ENEMIES, BOSSES, WAVE, elementMult, ELEMENT_SKILLS, BOSS_CC_MULT } from './config.js';
 import { rand, pick, weighted, dist, shuffle } from './utils.js';
 
 const PERIM = 2 * (BOARD.cols - 1) + 2 * (BOARD.rows - 1); // 22
@@ -212,7 +212,7 @@ export class Game {
   spawn(q) {
     const def = ENEMIES[q.type];
     const e = { id: _id++, type: q.type, sprite: q.type, icon: def.icon, name: def.name, t: 0, laps: 0, speed: def.speed * RULES.enemySpeed,
-      size: def.size, gold: def.gold, shield: !!def.shield, boss: !!def.boss, element: q.element, slow: 0, slowUntil: 0, dots: [], flash: 0, dead: false, bob: Math.random() * 6.28 };
+      size: def.size, gold: def.gold, shield: !!def.shield, boss: !!def.boss, element: q.element, slow: 0, slowUntil: 0, stunUntil: 0, rootUntil: 0, curseUntil: 0, dots: [], flash: 0, dead: false, bob: Math.random() * 6.28 };
     if (q.bossDef) { e.hp = e.maxHp = Math.round(q.bossDef.hp * this.bossHpMult); e.icon = q.bossDef.icon; e.sprite = q.bossDef.sprite; e.name = q.bossDef.name; e.gold = RULES.bossGoldBase + this.round * 5; this.boss = e; }
     else e.hp = e.maxHp = Math.round(def.hp * q.hpScale);
     this.enemies.push(e);
@@ -224,6 +224,7 @@ export class Game {
   hit(e, dmg, src) {
     if (e.dead) return;
     if (e.shield) dmg = Math.max(1, dmg * (1 - RULES.shieldReduce));
+    if (this.time < e.curseUntil) dmg *= 1 + ELEMENT_SKILLS.dark.amp;   // 저주: 받는 피해 증가
     e.hp -= dmg; e.flash = 0.08;
     if (e.hp <= 0) this.kill(e);
   }
@@ -267,6 +268,7 @@ export class Game {
       for (const e of alive) { const p = this.enemyPos(e); if (dist(p.x, p.y, tp.x, tp.y) <= u.radius) { this.hit(e, dmg * em(e)); applyStatus(e); } }
       this.effects.push({ kind: 'ring', x: tp.x, y: tp.y, color: RARITY_INFO[u.rarity].color, t: 0, dur: 0.3, r: u.radius });
     } else { this.hit(target, dmg * em(target)); applyStatus(target); }
+    this.procSkill(u, target, dmg * em(target));
     if (u.pierce) {
       const others = alive.filter(e => e !== target).map(e => ({ e, d: Math.abs(this.progress(e) - this.progress(target)) })).filter(o => o.d < 1.6).sort((a, b) => a.d - b.d).slice(0, u.pierce - 1);
       for (const o of others) this.hit(o.e, dmg * 0.7 * em(o.e));
@@ -286,6 +288,30 @@ export class Game {
     if (crit) this.effects.push({ kind: 'text', x: tp.x, y: tp.y - 0.3, text: 'CRIT', color: '#ff5c7a', t: 0, dur: 0.6 });
   }
 
+  // 속성 스킬 발동 (주 대상에게만)
+  procSkill(u, e, dmg) {
+    const sk = ELEMENT_SKILLS[u.element]; if (!sk || e.dead || Math.random() >= sk.chance) return;
+    const cc = e.boss ? BOSS_CC_MULT : 1, p = this.enemyPos(e);
+    switch (u.element) {
+      case 'fire': e.dots.push({ dps: dmg * sk.dotPct, until: this.time + sk.dur, kind: 'burn' }); break;
+      case 'water': e.slow = Math.max(e.slow, sk.slow); e.slowUntil = Math.max(e.slowUntil, this.time + sk.dur); break;
+      case 'wind': { e.t -= sk.push * cc; if (e.t < 0) { if (e.laps > 0) { e.laps--; e.t += PERIM; } else e.t = 0; } break; }
+      case 'earth': e.rootUntil = Math.max(e.rootUntil, this.time + sk.dur * cc); break;
+      case 'thunder': {
+        e.stunUntil = Math.max(e.stunUntil, this.time + sk.dur * cc);
+        let best = null, bd = 1.5;
+        for (const o of this.enemies) { if (o === e || o.dead) continue; const q = this.enemyPos(o); const d = dist(q.x, q.y, p.x, p.y); if (d < bd) { bd = d; best = o; } }
+        if (best) { const q = this.enemyPos(best); this.hit(best, dmg * sk.jump); this.effects.push({ kind: 'chain', pts: [p, q], color: '#ffe84a', t: 0, dur: 0.2 }); }
+        break;
+      }
+      case 'light': this.hit(e, dmg * sk.bonus); break;
+      case 'dark': e.curseUntil = Math.max(e.curseUntil, this.time + sk.dur); break;
+    }
+    this.effects.push({ kind: 'skill', element: u.element, x: p.x, y: p.y, t: 0, dur: 0.55 });
+    this.effects.push({ kind: 'text', x: p.x, y: p.y - 0.45, text: sk.name, color: '#fff', small: true, t: 0, dur: 0.6 });
+    this.emit('sfx', 'skill');
+  }
+
   // ---------- 보드 틱 (스폰·이동·공격·투사체·이펙트). 라운드/승패는 Match가 처리 ----------
   tick(dt) {
     this.time += dt;
@@ -296,7 +322,8 @@ export class Game {
     for (const e of this.enemies) {
       if (e.dead) continue;
       const slow = this.time < e.slowUntil ? e.slow : 0;
-      e.t += e.speed * (1 - slow) * dt;
+      const held = this.time < e.stunUntil || this.time < e.rootUntil;   // 스턴·속박
+      if (!held) e.t += e.speed * (1 - slow) * dt;
       if (e.t >= PERIM) { e.t -= PERIM; e.laps++; }
       if (e.flash > 0) e.flash -= dt;
       if (e.dots.length) {

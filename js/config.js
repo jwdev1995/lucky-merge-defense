@@ -19,7 +19,7 @@ export const RULES = {
   shieldReduce: 0.2,
   elementAdv: 1.3,       // 상성 유리 피해 배율
   elementDis: 0.9,       // 상성 불리 피해 배율
-  coopLimitMult: 1.5,    // 2인 협동 시 몬스터 한도 배율 (100 → 150, 두 보드 합산)
+  coopLimitMult: 1.6,    // 2인 협동 시 몬스터 한도 배율 (100 → 160, 두 보드 합산)
   coopBossHpMult: 0.8,   // 2인 협동 시 보드별 보스 체력 배율 (둘 다 잡아야 하므로 완화)
   giftGold: 20,          // 협동 골드 지원 단위
 };
@@ -35,6 +35,17 @@ export const ELEMENTS = {
   dark:    { name:'어둠', short:'암', color:'#9b6bff', eye:'#7a3fe0', beats:'light' },
 };
 export const ELEMENT_ORDER = ['fire', 'water', 'wind', 'earth', 'thunder', 'light', 'dark'];
+// 속성 스킬: 유닛의 주 대상 타격마다 chance 확률로 발동. 보스에게는 스턴·속박·밀치기 효과가 BOSS_CC_MULT 배.
+export const ELEMENT_SKILLS = {
+  fire:    { name:'화상',   chance:0.25, desc:'2초간 초당 공격력 30%의 추가 피해', dur:2, dotPct:0.3 },
+  water:   { name:'둔화',   chance:0.25, desc:'2초간 이동속도 40% 감소', dur:2, slow:0.4 },
+  wind:    { name:'밀치기', chance:0.2,  desc:'경로 뒤쪽으로 0.7칸 밀어냄', push:0.7 },
+  earth:   { name:'속박',   chance:0.2,  desc:'1초간 이동 불가', dur:1.0 },
+  thunder: { name:'감전',   chance:0.2,  desc:'0.5초 스턴 + 인접 1체에 피해 50% 전이', dur:0.5, jump:0.5 },
+  light:   { name:'성광',   chance:0.2,  desc:'즉시 공격력 60%의 추가 피해', bonus:0.6 },
+  dark:    { name:'저주',   chance:0.2,  desc:'3초간 받는 피해 +25%', dur:3, amp:0.25 },
+};
+export const BOSS_CC_MULT = 0.3;
 export function elementMult(atk, def) {
   if (!atk || !def || atk === def) return 1;
   if (ELEMENTS[atk].beats === def) return RULES.elementAdv;
@@ -114,12 +125,12 @@ export const ENEMIES = {
 export const BOSSES = [
   { round: 10, name:'오우거 군주', icon:'👹', sprite:'ogre', element:'earth', hp:600 },
   { round: 20, name:'흑룡',       icon:'🐉', sprite:'blackdragon', element:'fire', hp:4500 },
-  { round: 30, name:'리치 킹',    icon:'💀', sprite:'lich', element:'dark', hp:30000 },
-  { round: 40, name:'마왕',       icon:'👑', sprite:'demonking', element:'thunder', hp:95000 },
+  { round: 30, name:'리치 킹',    icon:'💀', sprite:'lich', element:'dark', hp:34000 },
+  { round: 40, name:'마왕',       icon:'👑', sprite:'demonking', element:'thunder', hp:120000 },
 ];
 
 export const WAVE = {
-  hpGrowth: 1.2,
+  hpGrowth: 1.21,
   count: (r) => Math.min(40, 12 + r),
   // 라운드별 구성 비율
   // 라운드 속성: 7속성 순환 (보스 라운드는 보스 고유 속성)

@@ -22,6 +22,7 @@ export class Audio {
       case 'summon_mythic': case 'mythic': [392, 523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => this.tone(f, 0.3, 'sawtooth', 0.09), i * 90)); break;
       case 'merge': this.tone(330, 0.08, 'square', 0.07, 300); setTimeout(() => this.tone(880, 0.2, 'triangle', 0.08), 90); break;
       case 'coin': this.tone(988, 0.07, 'square', 0.06); setTimeout(() => this.tone(1319, 0.12, 'square', 0.06), 60); break;
+      case 'skill': if (now - (this.lastSkill || 0) < 120) return; this.lastSkill = now; this.tone(880, 0.07, 'triangle', 0.05, 400); break;
       case 'upgrade': this.tone(660, 0.1, 'triangle', 0.08, 220); break;
       case 'fail': this.tone(200, 0.25, 'sawtooth', 0.07, -80); break;
       case 'warn': this.tone(220, 0.3, 'square', 0.08); setTimeout(() => this.tone(220, 0.3, 'square', 0.08), 350); break;
