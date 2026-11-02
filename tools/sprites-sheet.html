@@ -1,8 +1,17 @@
 <!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>Sprite Sheet</title>
-<style>body{background:#0e1020;color:#e8ecf8;font-family:system-ui;padding:16px}.g{display:flex;flex-wrap:wrap;gap:12px}.c{width:96px;text-align:center;font-size:11px}canvas{image-rendering:pixelated;background:#242a4a;border-radius:8px}</style></head>
-<body><div class="g" id="g"></div>
+<style>body{background:#0e1020;color:#e8ecf8;font-family:system-ui;padding:16px}h2{font-size:14px;color:#8d95b5;margin:16px 0 8px}.g{display:flex;flex-wrap:wrap;gap:12px}.c{width:110px;text-align:center;font-size:11px}.c .f{display:flex;gap:2px;justify-content:center}canvas{image-rendering:pixelated;background:#242a4a;border-radius:8px}</style></head>
+<body>
+<h2>유닛 (대기 / 공격 프레임)</h2><div class="g" id="units"></div>
+<h2>몬스터 · 보스</h2><div class="g" id="mobs"></div>
 <script type="module">
-import { PIXEL_ART, sprite } from '../js/sprites.js';
-const g = document.getElementById('g');
-for (const k of Object.keys(PIXEL_ART)) { const c = sprite(k, 6); const d = document.createElement('div'); d.className = 'c'; d.appendChild(c); d.append(document.createElement('br'), k); g.appendChild(d); }
+import { SPRITE_KEYS, sprite, hasAttackFrame } from '../js/sprites.js';
+import { UNITS } from '../js/config.js';
+for (const k of SPRITE_KEYS) {
+  const d = document.createElement('div'); d.className = 'c';
+  const f = document.createElement('div'); f.className = 'f';
+  f.appendChild(sprite(k, 3));
+  if (hasAttackFrame(k)) f.appendChild(sprite(k, 3, null, 'attack'));
+  d.appendChild(f); d.append(document.createElement('br'), UNITS[k] ? `${UNITS[k].name} (${k})` : k);
+  document.getElementById(UNITS[k] ? 'units' : 'mobs').appendChild(d);
+}
 </script></body></html>
