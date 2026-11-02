@@ -1,8 +1,9 @@
-import { BOARD, UNITS, RARITY_INFO, RULES } from './config.js';
+import { BOARD, UNITS, RARITY_INFO, ELEMENTS } from './config.js';
 import { cellCenter, pathPos, GRID_CELLS } from './game.js';
 import { sprite } from './sprites.js';
 
 const COLORS = { path: '#1c2140', pathLine: '#2a3160', cell: '#242a4a', cellLine: '#343c66', sel: '#ffd166' };
+const ATK_DUR = 0.28; // 공격 모션 길이(초)
 
 export class Renderer {
   constructor(canvas) {
@@ -28,8 +29,9 @@ export class Renderer {
     return r * BOARD.gridCols + c;
   }
 
-  draw(g, dtReal) {
+  draw(g) {
     const ctx = this.ctx, cs = this.cell;
+    if (!this.w) this.resize();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
     // 경로
@@ -37,7 +39,7 @@ export class Renderer {
     ctx.strokeStyle = COLORS.pathLine; ctx.lineWidth = 1;
     for (let i = 0; i <= BOARD.cols; i++) { const p = this.toPx(i, 0); ctx.beginPath(); ctx.moveTo(p.x, this.oy); ctx.lineTo(p.x, this.oy + cs * BOARD.rows); ctx.stroke(); }
     for (let j = 0; j <= BOARD.rows; j++) { const p = this.toPx(0, j); ctx.beginPath(); ctx.moveTo(this.ox, p.y); ctx.lineTo(this.ox + cs * BOARD.cols, p.y); ctx.stroke(); }
-    // 경로 방향 화살표 (점선 흐름)
+    // 경로 방향 (점선 흐름)
     ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = Math.max(4, cs * 0.16); ctx.setLineDash([cs * 0.3, cs * 0.3]); ctx.lineDashOffset = -(g.time * cs * 0.6) % (cs * 0.6);
     ctx.beginPath(); const a = this.toPx(0.5, 0.5), b = this.toPx(BOARD.cols - 0.5, BOARD.rows - 0.5);
     ctx.rect(a.x, a.y, b.x - a.x, b.y - a.y); ctx.stroke(); ctx.setLineDash([]);
@@ -52,9 +54,10 @@ export class Renderer {
       if (cellObj && g.canMerge(i)) { stroke = COLORS.sel; lw = 2 + Math.sin(g.time * 8) * 1; }
       if (i === this.selected) { stroke = COLORS.sel; lw = 3; }
       ctx.strokeStyle = stroke; ctx.lineWidth = lw; this.rr(p.x + pad, p.y + pad, cs - pad * 2, cs - pad * 2, cs * 0.14); ctx.stroke();
-      if (cellObj) this.drawUnit(g, i, cellObj);
       if (i === this.selected && cellObj) { const u = UNITS[cellObj.id]; const cc = this.toPx(c.x, c.y); ctx.strokeStyle = 'rgba(255,209,102,.5)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cc.x, cc.y, u.range * cs, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     }
+    // 유닛 (공격 중인 유닛이 다른 칸 위로 튀어나오므로 칸을 모두 그린 뒤)
+    for (let i = 0; i < GRID_CELLS; i++) if (g.cells[i]) this.drawUnit(g, i, g.cells[i]);
     // 체인 이펙트 (적 아래)
     for (const f of g.effects) if (f.kind === 'chain') { ctx.strokeStyle = f.color; ctx.lineWidth = 3 * (1 - f.t / f.dur); ctx.beginPath(); f.pts.forEach((pt, k) => { const p = this.toPx(pt.x, pt.y); k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); }); ctx.stroke(); }
     // 적
@@ -72,21 +75,38 @@ export class Renderer {
     for (const f of g.effects) if (f.kind === 'flash') { ctx.fillStyle = f.color; ctx.globalAlpha = 0.25 * (1 - f.t / f.dur); ctx.fillRect(0, 0, this.w, this.h); ctx.globalAlpha = 1; }
   }
   rr(x, y, w, h, r) { const c = this.ctx; c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  // 속성 배지 (작은 원 + 한 글자)
+  badge(x, y, r, element) {
+    const ctx = this.ctx, el = ELEMENTS[element]; if (!el) return;
+    ctx.fillStyle = el.color; ctx.strokeStyle = '#2b2340'; ctx.lineWidth = Math.max(1, r * 0.22);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = element === 'light' || element === 'thunder' || element === 'wind' ? '#2b2340' : '#fff';
+    ctx.font = `bold ${r * 1.3}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(el.short, x, y + r * 0.08);
+  }
   drawUnit(g, i, cellObj) {
     const ctx = this.ctx, cs = this.cell, u = UNITS[cellObj.id], col = RARITY_INFO[u.rarity].color;
     const c = cellCenter(i), p = this.toPx(c.x, c.y);
     let scale = 1;
     for (const f of g.effects) if (f.kind === 'pop' && f.cell === i) { const k = f.t / f.dur; scale = k < 0.5 ? k * 2.4 : 1.2 - (k - 0.5) * 0.4; }
     const r = cs * 0.36 * scale;
+    // 공격 모션: 대상 방향으로 돌진 → 복귀, 가로로 살짝 늘어남. 대기 중엔 숨쉬기 바운스.
+    const atk = cellObj.atk ?? 9, k = Math.min(1, atk / ATK_DUR), lunge = Math.sin(k * Math.PI);
+    const dir = cellObj.atkDir || 0, dx = Math.cos(dir) * lunge * cs * 0.16, dy = Math.sin(dir) * lunge * cs * 0.16;
+    const bob = atk >= ATK_DUR ? Math.sin(g.time * 3.2 + i * 1.3) * cs * 0.014 : 0;
+    const sx = 1 + lunge * 0.14, sy = 1 - lunge * 0.10;
     ctx.save();
     if (u.rarity === 'mythic' || u.rarity === 'legend') { ctx.shadowColor = col; ctx.shadowBlur = 10 + Math.sin(g.time * 5) * 5; }
     ctx.fillStyle = '#10131f'; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, cs * 0.05); ctx.stroke();
-    ctx.imageSmoothingEnabled = false;
-    const img = sprite(u.id, 4), sz = r * 1.6;
-    if (img) ctx.drawImage(img, p.x - sz / 2, p.y - sz / 2, sz, sz);
     ctx.restore();
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.translate(p.x + dx, p.y + dy + bob); ctx.scale(sx * (cellObj.face || 1), sy);
+    const img = sprite(u.id, 4, null, atk < ATK_DUR * 0.75 ? 'attack' : 'idle'), sz = r * 2.0;
+    if (img) ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
+    ctx.restore();
+    this.badge(p.x - r * 0.78, p.y + r * 0.78, cs * 0.1, u.element);
     if (cellObj.count > 1) {
       const bx = p.x + r * 0.75, by = p.y - r * 0.75;
       ctx.fillStyle = cellObj.count >= 3 ? '#ffd166' : '#fff'; ctx.beginPath(); ctx.arc(bx, by, cs * 0.13, 0, Math.PI * 2); ctx.fill();
@@ -95,16 +115,24 @@ export class Renderer {
   }
   drawEnemy(g, e) {
     const ctx = this.ctx, cs = this.cell, pos = pathPos(e.t), p = this.toPx(pos.x, pos.y), r = e.size * cs;
+    const ahead = pathPos(e.t + 0.2), face = ahead.x < pos.x - 0.01 ? -1 : 1;
+    const walk = Math.sin(g.time * (e.boss ? 4 : 9) + (e.bob || 0));
     ctx.save();
     if (e.boss) { ctx.shadowColor = '#ff5c7a'; ctx.shadowBlur = 16; }
     const slowed = g.time < e.slowUntil, burning = e.dots.some(d => d.kind === 'burn'), poisoned = e.dots.some(d => d.kind === 'poison');
     if (slowed) { ctx.fillStyle = 'rgba(78,168,255,.35)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.05, 0, Math.PI * 2); ctx.fill(); }
     if (poisoned) { ctx.fillStyle = 'rgba(94,227,154,.3)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.0, 0, Math.PI * 2); ctx.fill(); }
     if (burning) { ctx.fillStyle = 'rgba(255,120,40,.35)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.shadowBlur = 0;
     ctx.imageSmoothingEnabled = false;
     const img = e.flash > 0 ? sprite(e.sprite, 4, '#ffffff') : sprite(e.sprite, 4), sz = r * 2.1;
-    if (img) { ctx.shadowBlur = 0; ctx.drawImage(img, p.x - sz / 2, p.y - sz / 2, sz, sz); }
+    // 걷기: 위아래 바운스 + 살짝 기울기, 보스는 숨쉬기
+    ctx.translate(p.x, p.y + (e.boss ? 0 : walk * cs * 0.03));
+    ctx.scale(face * (e.boss ? 1 + walk * 0.03 : 1), e.boss ? 1 - walk * 0.03 : 1);
+    if (!e.boss) ctx.rotate(walk * 0.08);
+    if (img) ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
     ctx.restore();
+    if (e.element) this.badge(p.x - r * 0.85, p.y - r * 0.85, cs * (e.boss ? 0.11 : 0.085), e.element);
     if (e.hp < e.maxHp) {
       const w = r * 1.8, h = Math.max(3, cs * 0.07), x = p.x - w / 2, y = p.y - r - h - 2;
       ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(x, y, w, h);
@@ -120,6 +148,6 @@ export class Renderer {
       for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + f.t; const d = R * k; ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, cs * 0.06 * (1 - k) + 1, 0, Math.PI * 2); ctx.fill(); }
       ctx.globalAlpha = 1;
     }
-    else if (f.kind === 'text') { const p = this.toPx(f.x, f.y - k * 0.5); ctx.fillStyle = f.color; ctx.globalAlpha = 1 - k; ctx.font = `bold ${cs * 0.26}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(f.text, p.x, p.y); ctx.globalAlpha = 1; }
+    else if (f.kind === 'text') { const p = this.toPx(f.x, f.y - k * 0.5); ctx.fillStyle = f.color; ctx.globalAlpha = 1 - k; ctx.font = `bold ${cs * (f.small ? 0.18 : 0.26)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3; ctx.strokeText(f.text, p.x, p.y); ctx.fillText(f.text, p.x, p.y); ctx.globalAlpha = 1; }
   }
 }

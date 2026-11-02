@@ -17,7 +17,30 @@ export const RULES = {
   enemySpeed: 1.1,       // cell/s
   critMult: 2.5,
   shieldReduce: 0.2,
+  elementAdv: 1.3,       // 상성 유리 피해 배율
+  elementDis: 0.9,       // 상성 불리 피해 배율
+  coopLimitMult: 1.5,    // 2인 협동 시 몬스터 한도 배율 (100 → 150, 두 보드 합산)
+  coopBossHpMult: 0.8,   // 2인 협동 시 보드별 보스 체력 배율 (둘 다 잡아야 하므로 완화)
+  giftGold: 20,          // 협동 골드 지원 단위
 };
+
+// 속성 상성: beats 대상에게 유리. 빛↔어둠은 서로 유리. color = 배지/UI, eye = 스프라이트 눈·허리띠(진한 변형)
+export const ELEMENTS = {
+  fire:    { name:'불',   short:'불', color:'#ff6b3d', eye:'#ff5a2a', beats:'wind' },
+  wind:    { name:'바람', short:'풍', color:'#7ee8c9', eye:'#2fbf96', beats:'earth' },
+  earth:   { name:'땅',   short:'땅', color:'#c9924a', eye:'#a86f2a', beats:'thunder' },
+  thunder: { name:'번개', short:'뇌', color:'#ffe84a', eye:'#e0b400', beats:'water' },
+  water:   { name:'물',   short:'물', color:'#4ea8ff', eye:'#2f86e6', beats:'fire' },
+  light:   { name:'빛',   short:'빛', color:'#fff1b8', eye:'#f0a63a', beats:'dark' },
+  dark:    { name:'어둠', short:'암', color:'#9b6bff', eye:'#7a3fe0', beats:'light' },
+};
+export const ELEMENT_ORDER = ['fire', 'water', 'wind', 'earth', 'thunder', 'light', 'dark'];
+export function elementMult(atk, def) {
+  if (!atk || !def || atk === def) return 1;
+  if (ELEMENTS[atk].beats === def) return RULES.elementAdv;
+  if (ELEMENTS[def].beats === atk) return RULES.elementDis;
+  return 1;
+}
 
 export const RARITY = ['common', 'rare', 'epic', 'legend', 'mythic'];
 export const RARITY_INFO = {
@@ -46,33 +69,33 @@ export const ROULETTE = [
 // dmg: 1회 피해, rate: 초당 공격 횟수, range: 셀 단위 사거리
 export const UNITS = {
   // 일반
-  archer:   { id:'archer',   name:'궁수',     rarity:'common', icon:'🏹', dmg:6,  rate:1.2, range:2.4, type:'single', desc:'기본 원거리 공격' },
-  sword:    { id:'sword',    name:'검병',     rarity:'common', icon:'⚔️', dmg:11, rate:0.8, range:1.6, type:'single', desc:'근접 강타' },
-  spear:    { id:'spear',    name:'창병',     rarity:'common', icon:'🔱', dmg:7,  rate:0.9, range:2.0, type:'pierce', pierce:2, desc:'직선 관통(2체)' },
-  slime:    { id:'slime',    name:'슬라임',   rarity:'common', icon:'🟢', dmg:4,  rate:1.0, range:1.8, type:'splash', radius:0.6, desc:'작은 광역 튀김' },
-  farmer:   { id:'farmer',   name:'농부',     rarity:'common', icon:'🌾', dmg:5,  rate:1.5, range:2.0, type:'single', desc:'빠른 낫질' },
+  archer:   { id:'archer',   name:'궁수',     rarity:'common', element:'wind', icon:'🏹', dmg:6,  rate:1.2, range:2.4, type:'single', desc:'기본 원거리 공격' },
+  sword:    { id:'sword',    name:'검병',     rarity:'common', element:'fire', icon:'⚔️', dmg:11, rate:0.8, range:1.6, type:'single', desc:'근접 강타' },
+  spear:    { id:'spear',    name:'창병',     rarity:'common', element:'water', icon:'🔱', dmg:7,  rate:0.9, range:2.0, type:'pierce', pierce:2, desc:'직선 관통(2체)' },
+  slime:    { id:'slime',    name:'슬라임',   rarity:'common', element:'water', icon:'🟢', dmg:4,  rate:1.0, range:1.8, type:'splash', radius:0.6, desc:'작은 광역 튀김' },
+  farmer:   { id:'farmer',   name:'농부',     rarity:'common', element:'earth', icon:'🌾', dmg:5,  rate:1.5, range:2.0, type:'single', desc:'빠른 낫질' },
   // 희귀
-  mage:     { id:'mage',     name:'마법사',   rarity:'rare', icon:'🔮', dmg:14, rate:0.8, range:2.6, type:'splash', radius:0.9, desc:'광역 마법탄' },
-  hunter:   { id:'hunter',   name:'사냥꾼',   rarity:'rare', icon:'🎯', dmg:9,  rate:2.2, range:2.8, type:'single', desc:'고속 연사' },
-  frost:    { id:'frost',    name:'얼음술사', rarity:'rare', icon:'❄️', dmg:12, rate:0.9, range:2.5, type:'slow', slow:0.4, slowDur:2, desc:'둔화 40% (2초)' },
-  crossbow: { id:'crossbow', name:'석궁병',   rarity:'rare', icon:'🪃', dmg:16, rate:0.9, range:2.8, type:'pierce', pierce:3, desc:'관통(3체)' },
-  rogue:    { id:'rogue',    name:'도적',     rarity:'rare', icon:'🔪', dmg:15, rate:1.3, range:1.8, type:'single', crit:0.3, desc:'치명타 30%' },
+  mage:     { id:'mage',     name:'마법사',   rarity:'rare', element:'thunder', icon:'🔮', dmg:14, rate:0.8, range:2.6, type:'splash', radius:0.9, desc:'광역 마법탄' },
+  hunter:   { id:'hunter',   name:'사냥꾼',   rarity:'rare', element:'wind', icon:'🎯', dmg:9,  rate:2.2, range:2.8, type:'single', desc:'고속 연사' },
+  frost:    { id:'frost',    name:'얼음술사', rarity:'rare', element:'water', icon:'❄️', dmg:12, rate:0.9, range:2.5, type:'slow', slow:0.4, slowDur:2, desc:'둔화 40% (2초)' },
+  crossbow: { id:'crossbow', name:'석궁병',   rarity:'rare', element:'earth', icon:'🪃', dmg:16, rate:0.9, range:2.8, type:'pierce', pierce:3, desc:'관통(3체)' },
+  rogue:    { id:'rogue',    name:'도적',     rarity:'rare', element:'dark', icon:'🔪', dmg:15, rate:1.3, range:1.8, type:'single', crit:0.3, desc:'치명타 30%' },
   // 영웅
-  pyro:     { id:'pyro',     name:'화염술사', rarity:'epic', icon:'🔥', dmg:30, rate:0.8, range:2.6, type:'burn', radius:1.0, dot:10, dotDur:3, desc:'광역 + 화상(초당 10, 3초)' },
-  sniper:   { id:'sniper',   name:'저격수',   rarity:'epic', icon:'🔭', dmg:120, rate:0.35, range:5.0, type:'single', crit:0.2, desc:'초장거리 고화력' },
-  storm:    { id:'storm',    name:'번개술사', rarity:'epic', icon:'⚡', dmg:34, rate:1.0, range:2.8, type:'chain', chain:3, desc:'연쇄 번개(3체)' },
-  assassin: { id:'assassin', name:'암살자',   rarity:'epic', icon:'🥷', dmg:40, rate:1.4, range:2.0, type:'single', crit:0.5, desc:'치명타 50%' },
-  viper:    { id:'viper',    name:'독사',     rarity:'epic', icon:'🐍', dmg:22, rate:1.2, range:2.4, type:'poison', dot:14, dotDur:4, desc:'중독(초당 14, 4초)' },
+  pyro:     { id:'pyro',     name:'화염술사', rarity:'epic', element:'fire', icon:'🔥', dmg:30, rate:0.8, range:2.6, type:'burn', radius:1.0, dot:10, dotDur:3, desc:'광역 + 화상(초당 10, 3초)' },
+  sniper:   { id:'sniper',   name:'저격수',   rarity:'epic', element:'light', icon:'🔭', dmg:120, rate:0.35, range:5.0, type:'single', crit:0.2, desc:'초장거리 고화력' },
+  storm:    { id:'storm',    name:'번개술사', rarity:'epic', element:'thunder', icon:'⚡', dmg:34, rate:1.0, range:2.8, type:'chain', chain:3, desc:'연쇄 번개(3체)' },
+  assassin: { id:'assassin', name:'암살자',   rarity:'epic', element:'dark', icon:'🥷', dmg:40, rate:1.4, range:2.0, type:'single', crit:0.5, desc:'치명타 50%' },
+  viper:    { id:'viper',    name:'독사',     rarity:'epic', element:'earth', icon:'🐍', dmg:22, rate:1.2, range:2.4, type:'poison', dot:14, dotDur:4, desc:'중독(초당 14, 4초)' },
   // 전설
-  dragonknight:{ id:'dragonknight', name:'드래곤 기사', rarity:'legend', icon:'🐲', dmg:150, rate:0.8, range:2.8, type:'splash', radius:1.4, desc:'대광역 브레스' },
-  archmage: { id:'archmage', name:'대마법사', rarity:'legend', icon:'🧙', dmg:260, rate:0.6, range:3.2, type:'splash', radius:1.2, desc:'광역 폭발' },
-  divinearcher:{ id:'divinearcher', name:'신궁', rarity:'legend', icon:'🌠', dmg:70, rate:3.0, range:3.4, type:'single', crit:0.25, desc:'초연사 + 치명타' },
-  chrono:   { id:'chrono',   name:'시간술사', rarity:'legend', icon:'⏳', dmg:140, rate:0.7, range:3.0, type:'slow', radius:1.2, slow:0.5, slowDur:2.5, desc:'광역 둔화 50%' },
+  dragonknight:{ id:'dragonknight', name:'드래곤 기사', rarity:'legend', element:'fire', icon:'🐲', dmg:150, rate:0.8, range:2.8, type:'splash', radius:1.4, desc:'대광역 브레스' },
+  archmage: { id:'archmage', name:'대마법사', rarity:'legend', element:'dark', icon:'🧙', dmg:260, rate:0.6, range:3.2, type:'splash', radius:1.2, desc:'광역 폭발' },
+  divinearcher:{ id:'divinearcher', name:'신궁', rarity:'legend', element:'light', icon:'🌠', dmg:70, rate:3.0, range:3.4, type:'single', crit:0.25, desc:'초연사 + 치명타' },
+  chrono:   { id:'chrono',   name:'시간술사', rarity:'legend', element:'water', icon:'⏳', dmg:140, rate:0.7, range:3.0, type:'slow', radius:1.2, slow:0.5, slowDur:2.5, desc:'광역 둔화 50%' },
   // 신화
-  phoenix:  { id:'phoenix',  name:'불사조',   rarity:'mythic', icon:'🦅', dmg:700, rate:1.0, range:3.4, type:'burn', radius:1.6, dot:120, dotDur:4, chain:3, desc:'대광역 화상 + 연쇄' },
-  chaoslord:{ id:'chaoslord', name:'혼돈의 군주', rarity:'mythic', icon:'👁️', dmg:900, rate:0.9, range:3.0, type:'splash', radius:1.3, crit:0.6, desc:'초고치명타 광역' },
-  archangel:{ id:'archangel', name:'천사장',  rarity:'mythic', icon:'👼', dmg:380, rate:2.5, range:6.0, type:'slow', slow:0.35, slowDur:2, desc:'초장거리 연사 + 둔화' },
-  worldtree:{ id:'worldtree', name:'세계수',  rarity:'mythic', icon:'🌳', dmg:500, rate:0.8, range:4.0, type:'poison', radius:2.2, dot:150, dotDur:5, slow:0.3, slowDur:3, desc:'광역 중독 + 둔화' },
+  phoenix:  { id:'phoenix',  name:'불사조',   rarity:'mythic', element:'fire', icon:'🦅', dmg:700, rate:1.0, range:3.4, type:'burn', radius:1.6, dot:120, dotDur:4, chain:3, desc:'대광역 화상 + 연쇄' },
+  chaoslord:{ id:'chaoslord', name:'혼돈의 군주', rarity:'mythic', element:'dark', icon:'👁️', dmg:900, rate:0.9, range:3.0, type:'splash', radius:1.3, crit:0.6, desc:'초고치명타 광역' },
+  archangel:{ id:'archangel', name:'천사장',  rarity:'mythic', element:'light', icon:'👼', dmg:380, rate:2.5, range:6.0, type:'slow', slow:0.35, slowDur:2, desc:'초장거리 연사 + 둔화' },
+  worldtree:{ id:'worldtree', name:'세계수',  rarity:'mythic', element:'earth', icon:'🌳', dmg:500, rate:0.8, range:4.0, type:'poison', radius:2.2, dot:150, dotDur:5, slow:0.3, slowDur:3, desc:'광역 중독 + 둔화' },
 };
 
 export const RECIPES = [
@@ -89,16 +112,18 @@ export const ENEMIES = {
   boss:   { name:'보스',   icon:'👹', hp:1, speed:0.55, gold:0, size:0.62, boss:true },
 };
 export const BOSSES = [
-  { round: 10, name:'오우거 군주', icon:'👹', sprite:'ogre', hp:600 },
-  { round: 20, name:'흑룡',       icon:'🐉', sprite:'blackdragon', hp:4500 },
-  { round: 30, name:'리치 킹',    icon:'💀', sprite:'lich', hp:30000 },
-  { round: 40, name:'마왕',       icon:'👑', sprite:'demonking', hp:95000 },
+  { round: 10, name:'오우거 군주', icon:'👹', sprite:'ogre', element:'earth', hp:600 },
+  { round: 20, name:'흑룡',       icon:'🐉', sprite:'blackdragon', element:'fire', hp:4500 },
+  { round: 30, name:'리치 킹',    icon:'💀', sprite:'lich', element:'dark', hp:30000 },
+  { round: 40, name:'마왕',       icon:'👑', sprite:'demonking', element:'thunder', hp:95000 },
 ];
 
 export const WAVE = {
   hpGrowth: 1.2,
   count: (r) => Math.min(40, 12 + r),
   // 라운드별 구성 비율
+  // 라운드 속성: 7속성 순환 (보스 라운드는 보스 고유 속성)
+  element: (r) => ELEMENT_ORDER[(r - 1) % ELEMENT_ORDER.length],
   mix: (r) => r < 5 ? { normal: 1 } : r < 12 ? { normal: 0.75, fast: 0.25 } : { normal: 0.6, fast: 0.25, shield: 0.15 },
 };
 

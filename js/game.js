@@ -1,5 +1,6 @@
-// 게임 로직 (DOM 비의존). UI/렌더러는 상태를 읽고, hooks로 이벤트를 받는다.
-import { BOARD, RULES, RARITY, RARITY_INFO, UPGRADE, SUMMON_ODDS, ROULETTE, UNITS, RECIPES, ENEMIES, BOSSES, WAVE } from './config.js';
+// 보드 1개의 게임 로직 (DOM 비의존). 라운드 진행·승패는 match.js의 Match가 관리한다.
+// UI/렌더러는 상태를 읽고, hooks로 이벤트를 받는다.
+import { BOARD, RULES, RARITY, RARITY_INFO, UPGRADE, SUMMON_ODDS, ROULETTE, UNITS, RECIPES, ENEMIES, BOSSES, WAVE, elementMult } from './config.js';
 import { rand, pick, weighted, dist, shuffle } from './utils.js';
 
 const PERIM = 2 * (BOARD.cols - 1) + 2 * (BOARD.rows - 1); // 22
@@ -23,8 +24,9 @@ export const nextRarity = (r) => RARITY[RARITY.indexOf(r) + 1] || null;
 let _id = 1;
 
 export class Game {
-  constructor(hooks = {}) {
+  constructor(hooks = {}, index = 0) {
     this.hooks = hooks;
+    this.index = index;           // 플레이어 번호 (0 = P1)
     this.reset();
   }
   emit(ev, data) { if (this.hooks[ev]) this.hooks[ev](data); }
@@ -44,14 +46,10 @@ export class Game {
     this.time = 0;
     this.speed = 1;
     this.boss = null;
+    this.bossHpMult = 1;          // Match가 협동 모드에서 조정
+    this.bossDown = false;        // 이번 라운드 보스 처치 여부
+    this.roundElement = null;
     this.stats = { kills: 0, summons: 0, merges: 0, crafts: 0, bestRarity: 0, goldEarned: 0 };
-    this.warned = false;
-  }
-
-  start() {
-    this.reset();
-    this.state = 'playing';
-    this.startRound(1);
   }
 
   // ---------- 상태 질의 ----------
@@ -69,6 +67,9 @@ export class Game {
     return recipe.parts.map(p => ({ id: p, have: this.cells.some(c => c && c.id === p) }));
   }
 
+  // 셀 객체: atk = 마지막 공격 후 경과 시간(공격 모션용), face = 바라보는 방향(1 오른쪽 / -1 왼쪽)
+  newCell(id) { return { id, count: 1, cd: 0, atk: 9, face: 1, atkDir: 0 }; }
+
   // ---------- 플레이어 행동 ----------
   placeUnit(id, preferCell = -1) {
     if (this.unitCount() >= RULES.unitCap) return { ok: false, msg: `유닛 상한 ${RULES.unitCap}개` };
@@ -80,7 +81,7 @@ export class Game {
     }
     if (idx < 0) { const empt = this.emptyCells(); if (empt.length) idx = pick(empt); }
     if (idx < 0) return { ok: false, msg: '빈 칸이 없습니다' };
-    if (this.cells[idx]) this.cells[idx].count++; else this.cells[idx] = { id, count: 1, cd: 0 };
+    if (this.cells[idx]) this.cells[idx].count++; else this.cells[idx] = this.newCell(id);
     const u = UNITS[id];
     this.stats.bestRarity = Math.max(this.stats.bestRarity, RARITY.indexOf(u.rarity));
     const p = cellCenter(idx);
@@ -125,7 +126,7 @@ export class Game {
     const c = this.cells[i];
     const nr = nextRarity(UNITS[c.id].rarity);
     const unit = pick(unitsOfRarity(nr));
-    this.cells[i] = { id: unit.id, count: 1, cd: 0 };
+    this.cells[i] = this.newCell(unit.id);
     this.stats.merges++;
     this.stats.bestRarity = Math.max(this.stats.bestRarity, RARITY.indexOf(nr));
     const p = cellCenter(i);
@@ -164,10 +165,10 @@ export class Game {
     }
     let idx = freed.length ? freed[0] : (this.emptyCells()[0] ?? -1);
     if (idx < 0) { // 롤백
-      for (let k = 0; k < rc.parts.length; k++) { const i = used[k]; if (this.cells[i]) this.cells[i].count++; else this.cells[i] = { id: rc.parts[k], count: 1, cd: 0 }; }
+      for (let k = 0; k < rc.parts.length; k++) { const i = used[k]; if (this.cells[i]) this.cells[i].count++; else this.cells[i] = this.newCell(rc.parts[k]); }
       return { ok: false, msg: '빈 칸이 필요합니다' };
     }
-    this.cells[idx] = { id: rc.result, count: 1, cd: 0 };
+    this.cells[idx] = this.newCell(rc.result);
     this.stats.crafts++; this.stats.bestRarity = 4;
     const p = cellCenter(idx);
     this.effects.push({ kind: 'burst', x: p.x, y: p.y, color: RARITY_INFO.mythic.color, t: 0, dur: 1 });
@@ -190,26 +191,29 @@ export class Game {
     this.roundTimer = RULES.roundTime;
     this.spawnClock = 0;
     this.spawnQueue = [];
+    this.bossDown = false;
     const bossDef = BOSSES.find(b => b.round === r);
+    const element = bossDef ? bossDef.element : WAVE.element(r);
+    this.roundElement = element;
     const n = bossDef ? 8 : WAVE.count(r);
     const mix = WAVE.mix(r);
     const hpScale = Math.pow(WAVE.hpGrowth, r - 1);
     for (let i = 0; i < n; i++) {
       const type = weighted(Object.keys(mix), k => mix[k]);
-      this.spawnQueue.push({ type, at: (i / n) * RULES.spawnWindow + rand(0, 0.3), hpScale });
+      this.spawnQueue.push({ type, at: (i / n) * RULES.spawnWindow + rand(0, 0.3), hpScale, element });
     }
     this.spawnQueue.sort((a, b) => a.at - b.at);
     if (bossDef) {
-      this.spawnQueue.unshift({ type: 'boss', at: 0.6, hpScale: 1, bossDef });
-      this.emit('banner', { text: `BOSS  ${bossDef.icon} ${bossDef.name}`, kind: 'boss' });
+      this.spawnQueue.unshift({ type: 'boss', at: 0.6, hpScale: 1, bossDef, element });
+      this.emit('banner', { text: `BOSS  ${bossDef.name}`, kind: 'boss', element });
       this.emit('sfx', 'boss');
-    } else this.emit('banner', { text: `ROUND ${r}`, kind: 'round' });
+    } else this.emit('banner', { text: `ROUND ${r}`, kind: 'round', element });
   }
   spawn(q) {
     const def = ENEMIES[q.type];
     const e = { id: _id++, type: q.type, sprite: q.type, icon: def.icon, name: def.name, t: 0, laps: 0, speed: def.speed * RULES.enemySpeed,
-      size: def.size, gold: def.gold, shield: !!def.shield, boss: !!def.boss, slow: 0, slowUntil: 0, dots: [], flash: 0, dead: false };
-    if (q.bossDef) { e.hp = e.maxHp = q.bossDef.hp; e.icon = q.bossDef.icon; e.sprite = q.bossDef.sprite; e.name = q.bossDef.name; e.gold = RULES.bossGoldBase + this.round * 5; this.boss = e; }
+      size: def.size, gold: def.gold, shield: !!def.shield, boss: !!def.boss, element: q.element, slow: 0, slowUntil: 0, dots: [], flash: 0, dead: false, bob: Math.random() * 6.28 };
+    if (q.bossDef) { e.hp = e.maxHp = Math.round(q.bossDef.hp * this.bossHpMult); e.icon = q.bossDef.icon; e.sprite = q.bossDef.sprite; e.name = q.bossDef.name; e.gold = RULES.bossGoldBase + this.round * 5; this.boss = e; }
     else e.hp = e.maxHp = Math.round(def.hp * q.hpScale);
     this.enemies.push(e);
   }
@@ -232,12 +236,11 @@ export class Game {
     this.effects.push({ kind: 'death', x: p.x, y: p.y, color: e.boss ? '#ffd166' : '#cfd6ff', t: 0, dur: e.boss ? 1.2 : 0.45, big: e.boss });
     if (e.gold >= 2) this.effects.push({ kind: 'text', x: p.x, y: p.y - 0.2, text: `+${e.gold}G`, color: '#ffd166', t: 0, dur: 0.9 });
     if (e.boss) {
-      this.boss = null;
+      this.boss = null; this.bossDown = true;
       this.emit('sfx', 'bosskill');
       this.emit('banner', { text: `보스 처치! +${e.gold}G`, kind: 'win' });
       const chest = this.chest();
       if (chest) this.emit('toast', chest);
-      if (this.round >= RULES.maxRound) this.end('won');
     }
   }
   chest() {
@@ -253,20 +256,22 @@ export class Game {
     const base = u.dmg * cell.count * this.dmgMult(u.rarity);
     const crit = u.crit && Math.random() < u.crit;
     const dmg = base * (crit ? RULES.critMult : 1);
+    const em = (e) => elementMult(u.element, e.element);   // 속성 상성 배율
     const tp = this.enemyPos(target);
     const alive = this.enemies.filter(e => !e.dead);
     const applyStatus = (e) => {
       if (u.slow) { e.slow = Math.max(e.slow, u.slow); e.slowUntil = Math.max(e.slowUntil, this.time + u.slowDur); }
-      if (u.dot) e.dots.push({ dps: u.dot * cell.count * this.dmgMult(u.rarity), until: this.time + u.dotDur, kind: u.type });
+      if (u.dot) e.dots.push({ dps: u.dot * cell.count * this.dmgMult(u.rarity) * em(e), until: this.time + u.dotDur, kind: u.type });
     };
     if (u.radius) {
-      for (const e of alive) { const p = this.enemyPos(e); if (dist(p.x, p.y, tp.x, tp.y) <= u.radius) { this.hit(e, dmg); applyStatus(e); } }
+      for (const e of alive) { const p = this.enemyPos(e); if (dist(p.x, p.y, tp.x, tp.y) <= u.radius) { this.hit(e, dmg * em(e)); applyStatus(e); } }
       this.effects.push({ kind: 'ring', x: tp.x, y: tp.y, color: RARITY_INFO[u.rarity].color, t: 0, dur: 0.3, r: u.radius });
-    } else { this.hit(target, dmg); applyStatus(target); }
+    } else { this.hit(target, dmg * em(target)); applyStatus(target); }
     if (u.pierce) {
       const others = alive.filter(e => e !== target).map(e => ({ e, d: Math.abs(this.progress(e) - this.progress(target)) })).filter(o => o.d < 1.6).sort((a, b) => a.d - b.d).slice(0, u.pierce - 1);
-      for (const o of others) this.hit(o.e, dmg * 0.7);
+      for (const o of others) this.hit(o.e, dmg * 0.7 * em(o.e));
     }
+    if (em(target) > 1) this.effects.push({ kind: 'text', x: tp.x + 0.25, y: tp.y - 0.15, text: '약점!', color: '#ffe84a', t: 0, dur: 0.5, small: true });
     if (u.chain) {
       let cur = target; const hitSet = new Set([target]); const pts = [tp];
       for (let k = 1; k < u.chain; k++) {
@@ -274,17 +279,15 @@ export class Game {
         let best = null, bd = 1.8;
         for (const e of alive) { if (hitSet.has(e)) continue; const p = this.enemyPos(e); const d = dist(p.x, p.y, cp.x, cp.y); if (d < bd) { bd = d; best = e; } }
         if (!best) break;
-        hitSet.add(best); this.hit(best, dmg * 0.6); applyStatus(best); cur = best; pts.push(this.enemyPos(best));
+        hitSet.add(best); this.hit(best, dmg * 0.6 * em(best)); applyStatus(best); cur = best; pts.push(this.enemyPos(best));
       }
       this.effects.push({ kind: 'chain', pts, color: '#ffe66d', t: 0, dur: 0.2 });
     }
     if (crit) this.effects.push({ kind: 'text', x: tp.x, y: tp.y - 0.3, text: 'CRIT', color: '#ff5c7a', t: 0, dur: 0.6 });
   }
 
-  // ---------- 메인 업데이트 ----------
-  update(rawDt) {
-    if (this.state !== 'playing') return;
-    const dt = Math.min(rawDt, 0.05) * this.speed;
+  // ---------- 보드 틱 (스폰·이동·공격·투사체·이펙트). 라운드/승패는 Match가 처리 ----------
+  tick(dt) {
     this.time += dt;
     // 스폰
     this.spawnClock += dt;
@@ -307,6 +310,7 @@ export class Game {
     for (let i = 0; i < this.cells.length; i++) {
       const c = this.cells[i]; if (!c) continue;
       const u = UNITS[c.id];
+      c.atk += dt;
       c.cd -= dt; if (c.cd > 0) continue;
       const p = cellCenter(i);
       let best = null, bp = -1;
@@ -317,6 +321,7 @@ export class Game {
       if (!best) { c.cd = 0.05; continue; }
       c.cd = 1 / u.rate;
       const ep = this.enemyPos(best);
+      c.atk = 0; c.atkDir = Math.atan2(ep.y - p.y, ep.x - p.x); if (Math.abs(ep.x - p.x) > 0.2) c.face = ep.x >= p.x ? 1 : -1;
       this.projectiles.push({ x: p.x, y: p.y, target: best, cell: c, idx: i, speed: 11, color: RARITY_INFO[u.rarity].color, type: u.type, tx: ep.x, ty: ep.y });
       this.emit('sfx', 'shot');
     }
@@ -338,24 +343,5 @@ export class Game {
     // 이펙트
     for (const f of this.effects) f.t += dt;
     this.effects = this.effects.filter(f => f.t < f.dur);
-    // 패배 조건
-    if (this.enemies.length >= RULES.enemyLimit) return this.end('lost', `몬스터가 ${RULES.enemyLimit}마리를 넘었습니다`);
-    if (!this.warned && this.enemies.length >= RULES.enemyLimit * 0.85) { this.warned = true; this.emit('toast', '⚠ 몬스터가 너무 많습니다!'); this.emit('sfx', 'warn'); }
-    if (this.enemies.length < RULES.enemyLimit * 0.7) this.warned = false;
-    // 라운드 타이머
-    this.roundTimer -= dt;
-    if (this.roundTimer <= 0) {
-      if (this.boss && !this.boss.dead) return this.end('lost', `${this.boss.name}을(를) 제한 시간 안에 처치하지 못했습니다`);
-      const bonus = RULES.roundBonusBase + this.round;
-      this.gold += bonus; this.stats.goldEarned += bonus;
-      this.emit('toast', `라운드 ${this.round} 클리어 +${bonus}G`);
-      if (this.round >= RULES.maxRound) return this.end('won');
-      this.startRound(this.round + 1);
-    }
-  }
-  end(result, reason = '') {
-    if (this.state !== 'playing') return;
-    this.state = result;
-    this.emit('end', { result, reason });
   }
 }
